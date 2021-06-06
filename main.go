@@ -53,13 +53,13 @@ func main() {
 			// 点击完等待
 			switch i {
 			case 4:
-				time.Sleep(3000 * time.Millisecond)
+				time.Sleep(2000 * time.Millisecond)
 			case 6, 7, 8, 9, 10:
-				time.Sleep(400 * time.Millisecond)
+				time.Sleep(100 * time.Millisecond)
 			case 11:
-				time.Sleep(1800 * time.Millisecond)
+				time.Sleep(1500 * time.Millisecond)
 			default:
-				time.Sleep(1000 * time.Millisecond)
+				time.Sleep(500 * time.Millisecond)
 			}
 		}
 		// 错误检测
@@ -67,37 +67,29 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		if name == ".activity.UPActivityMain" {
-			continue
-		}
-		if name == ".activity.react.UPActivityReactNative" { // 卡在支付界面
-			errNum++
-			err := adb.Clink(device, 70, 136)
+		delay := 2000
+		for name != ".activity.UPActivityMain" {
+			// 出现错误就重启app
+			_, err := adb.RunCmdToDevice(device, []string{"shell", "am force-stop  com.unionpay"})
 			if err != nil {
 				panic(err)
 			}
-			time.Sleep(1100 * time.Millisecond)
+			time.Sleep(time.Duration(delay) * time.Millisecond)
+			_, err = adb.RunCmdToDevice(device, []string{"shell", "am start -n com.unionpay/.activity.UPActivityMain"})
+			if err != nil {
+				panic(err)
+			}
+			time.Sleep(time.Duration(delay) * time.Millisecond)
 			name, err = adb.GetTopActivity(device, app)
 			if err != nil {
 				panic(err)
 			}
-			if name == ".activity.react.UPActivityReactNative" {
-				for name == ".activity.react.UPActivityReactNative" {
-					err := adb.Clink(device, 997, 139)
-					if err != nil {
-						panic(err)
-					}
-					time.Sleep(1100 * time.Millisecond)
-					name, err = adb.GetTopActivity(device, app)
-					if err != nil {
-						panic(err)
-					}
-				}
-			}
-			continue
+			delay += 1000
 		}
-		fmt.Println(name)
-		panic("activity error")
+		if delay != 2000 {
+			errNum++
+			num--
+		}
 	}
 
 }
