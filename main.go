@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"time"
 	"ysf/utils"
@@ -21,24 +22,38 @@ var ysfY = []uint{332, 1878, 448, 419, 206, 2074, 1659, 1831, 1961, 1834, 1688, 
 var device = "beff28c7"
 var app = "unionpay"
 
+var aim = 1
+
 func init() {
 	for i, item := range password {
 		ysfX[i+6] = numX[item-'0']
 		ysfY[i+6] = numY[item-'0']
-		fmt.Println(i, item-'0')
 	}
 }
 
 func main() {
+	flag.IntVar(&aim, "n", 1, "num of ysf")
+	flag.Parse()
+
 	adb := utils.NewAdb("adb")
 	err := adb.ConnectDev(device, false)
 	if err != nil {
 		panic(err)
 	}
 
+	// 启动程序
+	_, err = adb.RunCmdToDevice(device, []string{"shell", "am start -n com.unionpay/.activity.UPActivityMain"})
+	if err != nil {
+		panic(err)
+	}
+	// 关闭振动
+	_, err = adb.RunCmdToDevice(device, []string{"shell", "cmd appops set com.unionpay VIBRATE ignore"})
+	if err != nil {
+		panic(err)
+	}
+
 	errNum := 0
 	num := 0
-	aim := 3000
 	for num < aim {
 		fmt.Println("---------------------")
 		fmt.Println(time.Now())
@@ -76,6 +91,10 @@ func main() {
 			}
 			time.Sleep(time.Duration(delay) * time.Millisecond)
 			_, err = adb.RunCmdToDevice(device, []string{"shell", "am start -n com.unionpay/.activity.UPActivityMain"})
+			if err != nil {
+				panic(err)
+			}
+			_, err = adb.RunCmdToDevice(device, []string{"shell", "cmd appops set com.unionpay VIBRATE ignore"})
 			if err != nil {
 				panic(err)
 			}
