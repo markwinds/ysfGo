@@ -1,118 +1,128 @@
 package main
 
 import (
-	"flag"
 	"fmt"
+	"gopkg.in/yaml.v3"
+	"io/ioutil"
+	"strconv"
+	"strings"
 	"time"
 	"ysf/utils"
 )
 
-// 数字键盘的位置
-var numX = []uint{551, 237, 530, 902, 158, 554, 895, 188, 550, 890}
-var numY = []uint{2086, 1673, 1681, 1676, 1837, 1814, 1816, 1950, 1950, 1950}
-
-// 支付密码
-var password = "159632"
-
-// 按键整个过程坐标
-var ysfX = []uint{663, 891, 310, 160, 955, 536, 206, 576, 902, 920, 879, 547, 1014}
-var ysfY = []uint{332, 1878, 448, 419, 206, 2074, 1659, 1831, 1961, 1834, 1688, 1689, 118}
-
-// 设备名
-var device = "beff28c7"
-var app = "com.unionpay"
-
-var aim = 1
-
-func init() {
-	for i, item := range password {
-		ysfX[i+6] = numX[item-'0']
-		ysfY[i+6] = numY[item-'0']
-	}
+var Config struct {
+	Coordinates []string `yaml:"Coordinates,flow"`
+	Delay       int      `yaml:"Delay"`
+	Num         int      `yaml:"Num"`
+	AdbPath     string   `yaml:"AdbPath"`
+	Device      string   `yaml:"Device"`
 }
 
-func main() {
-	flag.IntVar(&aim, "n", 1, "num of ysf")
-	flag.Parse()
+var configPath = "./config.yml"
+var app = "com.unionpay"
 
-	adb := utils.NewAdb("adb")
-	err := adb.ConnectDev(device, false)
+func main() {
+	// 解析参数
+	content, err := ioutil.ReadFile(configPath)
+	if err != nil {
+		panic(err) // 程序要运行一些参数是必要的 没有配置文件直接退出
+	}
+	err = yaml.Unmarshal(content, &Config)
+	if len(Config.Coordinates) == 0 {
+		panic("coordinate num is 0")
+	}
+
+	// 解析坐标
+	var (
+		ysfX []uint
+		ysfY []uint
+	)
+	for _, item := range Config.Coordinates {
+		c := strings.Split(item, ",")
+		if len(c) != 2 {
+			panic("coordinate format error")
+		}
+		x, _ := strconv.Atoi(c[0])
+		y, _ := strconv.Atoi(c[1])
+		ysfX = append(ysfX, uint(x))
+		ysfY = append(ysfY, uint(y))
+	}
+	pwdIndex := len(ysfX) - 8
+
+	// 初始化adb
+	adb := utils.NewAdb(Config.AdbPath)
+	err = adb.ConnectDev(Config.Device, false)
 	if err != nil {
 		panic(err)
 	}
 
 	// 启动程序
-	_, err = adb.RunCmdToDevice(device, []string{"shell", "am start -n com.unionpay/.activity.UPActivityMain"})
+	_, err = adb.RunCmdToDevice(Config.Device, []string{"shell", "am start -n com.unionpay/.activity.UPActivityMain"})
 	if err != nil {
 		panic(err)
 	}
 	// 关闭振动
-	_, err = adb.RunCmdToDevice(device, []string{"shell", "cmd appops set com.unionpay VIBRATE ignore"})
+	_, err = adb.RunCmdToDevice(Config.Device, []string{"shell", "cmd appops set com.unionpay VIBRATE ignore"})
 	if err != nil {
 		panic(err)
 	}
 	// 屏幕常亮
-	err = adb.AlwaysLight(device)
+	err = adb.AlwaysLight(Config.Device)
 	if err != nil {
 		panic(err)
 	}
 
 	errNum := 0
 	num := 0
-	for num < aim {
+	for num < Config.Num {
 		fmt.Println("---------------------")
 		fmt.Println(time.Now())
 		fmt.Printf("num[%d] err[%d]", num+1, errNum)
 		num += 1
 		// 开始点击
 		for i, item := range ysfX {
-			err := adb.Clink(device, item, ysfY[i])
+			err := adb.Clink(Config.Device, item, ysfY[i])
 			if err != nil {
 				panic(err)
 			}
 			// 点击完等待
-			switch i {
-			case 4:
-				time.Sleep(2000 * time.Millisecond)
-			case 6, 7, 8, 9, 10:
-				time.Sleep(100 * time.Millisecond)
-			case 11:
-				time.Sleep(1500 * time.Millisecond)
-			default:
+			if i >= pwdIndex && i < pwdIndex+6 {
 				time.Sleep(500 * time.Millisecond)
+			} else {
+				time.Sleep(time.Duration(Config.Delay) * time.Millisecond)
 			}
 		}
 		// 错误检测
-		activity, err := adb.GetTopActivity(device, app)
+		activity, err := adb.GetTopActivity(Config.Device, app)
 		if err != nil {
 			panic(err)
 		}
-		fragment, err := adb.GetTopFragment(device, app)
+		fragment, err := adb.GetTopFragment(Config.Device, app)
 		if err != nil {
 			panic(err)
 		}
 		delay := 2000
 		for activity != ".activity.UPActivityMain" || fragment != "0" {
 			// 出现错误就重启app
-			_, err := adb.RunCmdToDevice(device, []string{"shell", "am force-stop  com.unionpay"})
+			_, err := adb.RunCmdToDevice(Config.Device, []string{"shell", "am force-stop  com.unionpay"})
 			if err != nil {
 				panic(err)
 			}
 			time.Sleep(time.Duration(delay) * time.Millisecond)
-			_, err = adb.RunCmdToDevice(device, []string{"shell", "am start -n com.unionpay/.activity.UPActivityMain"})
+			_, err = adb.RunCmdToDevice(Config.Device, []string{"shell", "am start -n com.unionpay/.activity.UPActivityMain"})
 			if err != nil {
 				panic(err)
 			}
-			_, err = adb.RunCmdToDevice(device, []string{"shell", "cmd appops set com.unionpay VIBRATE ignore"})
+			_, err = adb.RunCmdToDevice(Config.Device, []string{"shell", "cmd appops set com.unionpay VIBRATE ignore"})
 			if err != nil {
 				panic(err)
 			}
 			time.Sleep(time.Duration(delay) * time.Millisecond)
-			activity, err = adb.GetTopActivity(device, app)
+			activity, err = adb.GetTopActivity(Config.Device, app)
 			if err != nil {
 				panic(err)
 			}
-			fragment, err = adb.GetTopFragment(device, app)
+			fragment, err = adb.GetTopFragment(Config.Device, app)
 			if err != nil {
 				panic(err)
 			}
