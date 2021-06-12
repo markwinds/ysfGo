@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -43,7 +44,7 @@ func (a *Adb) ConnectDev(device string, root bool) error {
 			return err
 		}
 		// root的uid为0 根据这个判断是否获取到了root权限
-		res, err = a.RunCmdToDevice(device, []string{"id"})
+		res, err = a.RunCmdToDevice(device, []string{"shell", "id"})
 		if err != nil {
 			return err
 		}
@@ -104,4 +105,41 @@ func (a *Adb) GetTopActivity(device string, app string) (string, error) {
 	res = strings.Trim(res, "\r\n")
 	res = strings.Trim(res, "\n")
 	return res, nil
+}
+
+// AlwaysLight 设置屏幕在usb插入时常亮
+func (a *Adb) AlwaysLight(device string) error {
+	if !a.CheckDevice(device) {
+		return fmt.Errorf("device[%s] not connected", device)
+	}
+	arg := `svc power stayon usb `
+	_, err := a.RunCmdToDevice(device, []string{"shell", arg})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetTopFragment 获取当全部fragment的编号
+func (a *Adb) GetTopFragment(device string, app string) (string, error) {
+	if !a.CheckDevice(device) {
+		return "", fmt.Errorf("device[%s] not connected", device)
+	}
+	// 组命令
+	arg := `dumpsys activity ` + app
+	res, err := a.RunCmdToDevice(device, []string{"shell", arg})
+	if err != nil {
+		return "", err
+	}
+	return GetVisibleFragment(res)
+}
+
+// GetVisibleFragment 根据字符串信息筛选出可见fragment的编号
+func GetVisibleFragment(org string) (string, error) {
+	r := regexp.MustCompile(`(?s).*#(\d+):.*?mUserVisibleHint=true.*`)
+	match := r.FindStringSubmatch(org)
+	if match == nil {
+		return "", fmt.Errorf("can not match fragment")
+	}
+	return match[1], nil
 }

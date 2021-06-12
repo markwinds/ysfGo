@@ -20,7 +20,7 @@ var ysfY = []uint{332, 1878, 448, 419, 206, 2074, 1659, 1831, 1961, 1834, 1688, 
 
 // 设备名
 var device = "beff28c7"
-var app = "unionpay"
+var app = "com.unionpay"
 
 var aim = 1
 
@@ -51,6 +51,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	// 屏幕常亮
+	err = adb.AlwaysLight(device)
+	if err != nil {
+		panic(err)
+	}
 
 	errNum := 0
 	num := 0
@@ -78,12 +83,16 @@ func main() {
 			}
 		}
 		// 错误检测
-		name, err := adb.GetTopActivity(device, app)
+		activity, err := adb.GetTopActivity(device, app)
+		if err != nil {
+			panic(err)
+		}
+		fragment, err := adb.GetTopFragment(device, app)
 		if err != nil {
 			panic(err)
 		}
 		delay := 2000
-		for name != ".activity.UPActivityMain" {
+		for activity != ".activity.UPActivityMain" || fragment != "0" {
 			// 出现错误就重启app
 			_, err := adb.RunCmdToDevice(device, []string{"shell", "am force-stop  com.unionpay"})
 			if err != nil {
@@ -99,7 +108,11 @@ func main() {
 				panic(err)
 			}
 			time.Sleep(time.Duration(delay) * time.Millisecond)
-			name, err = adb.GetTopActivity(device, app)
+			activity, err = adb.GetTopActivity(device, app)
+			if err != nil {
+				panic(err)
+			}
+			fragment, err = adb.GetTopFragment(device, app)
 			if err != nil {
 				panic(err)
 			}
